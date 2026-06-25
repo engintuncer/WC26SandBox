@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>World Cup 2026 - Bracket</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Roboto+Condensed:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+:root{--gold:#FFD700;--gold2:#FFA500;--green:#00c97a;--blue:#4a9eff;--live:#E31937;--bg:#07101f;--bg2:#0f1c30;--border:#1e2f4a;--text:#dde5f5;--muted:#5a7090}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-family:'Roboto Condensed',sans-serif;overflow:hidden}
+#hdr{display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,var(--bg2) 0%,#091528 100%);border-bottom:2px solid var(--gold);padding:8px 14px;height:54px}
+.hl{display:flex;align-items:center;gap:10px}
+.trophy{font-size:24px}
+.tm{font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;color:var(--gold);letter-spacing:1px}
+.ts{font-size:8px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+.nav-center{flex:1;text-align:center}
+.nav-links{display:flex;gap:20px;justify-content:center}
+.nav-links a{color:var(--text);text-decoration:none;font-family:'Oswald',sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;padding:4px 8px;border-radius:3px;transition:all 0.3s}
+.nav-links a:hover{color:var(--gold);background:rgba(255,215,0,.1)}
+.nav-links a.active{color:var(--gold);background:rgba(255,215,0,.15);border-bottom:2px solid var(--gold)}
+.hr{text-align:right;font-size:9px;color:var(--muted)}
+main{height:calc(100vh - 54px);overflow-x:auto;overflow-y:hidden;background:var(--bg);padding:12px}
+.bracket{display:flex;gap:20px;min-width:min-content;padding-right:20px}
+.round{display:flex;flex-direction:column;justify-content:space-around;flex-shrink:0;min-width:200px}
+.round-title{font-family:'Oswald',sans-serif;font-size:10px;font-weight:700;color:var(--gold);letter-spacing:1px;text-transform:uppercase;text-align:center;margin-bottom:10px;border-bottom:1px solid var(--border);padding-bottom:6px}
+.match{background:linear-gradient(135deg,var(--bg2),rgba(15,28,48,.8));border:1px solid var(--border);border-radius:4px;padding:6px;margin:8px 0;cursor:pointer;transition:all 0.3s}
+.match:hover{border-color:var(--gold);box-shadow:0 0 12px rgba(255,215,0,.2)}
+.match.live{border:2px solid var(--live);box-shadow:0 0 16px rgba(227,25,55,.3)}
+.match.done{border-color:var(--green)}
+.match-status{font-size:7px;color:var(--gold);font-weight:700;text-align:center;margin-bottom:4px;text-transform:uppercase;border-bottom:1px solid var(--border);padding-bottom:2px}
+.team{display:flex;gap:4px;padding:3px 0;font-size:8px;align-items:center}
+.flag{font-size:12px;flex-shrink:0}
+.name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Oswald',sans-serif;font-weight:600}
+.score{font-size:12px;font-weight:800;color:var(--gold);font-family:'Courier New',monospace;min-width:20px;text-align:right}
+.live-dot{display:inline-block;width:6px;height:6px;background:var(--live);border-radius:50%;margin-right:4px;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+#loading{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100}
+.lt{font-family:'Oswald',sans-serif;font-size:20px;color:var(--gold);letter-spacing:2px;margin-top:10px}
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div style="font-size:50px">🏆</div>
+  <div class="lt">Loading Bracket...</div>
+</div>
+
+<div id="hdr">
+  <div class="hl">
+    <span class="trophy">🏆</span>
+    <div>
+      <div class="tm">FIFA WC 2026</div>
+      <div class="ts">Knockout Stage</div>
+    </div>
+  </div>
+  <div class="nav-center">
+    <div class="nav-links">
+      <a href="index.html">Groups</a>
+      <a href="bracket.html" class="active">Bracket</a>
+    </div>
+  </div>
+  <div class="hr">
+    <div id="upd">--:--</div>
+  </div>
+</div>
+
+<main>
+  <div class="bracket" id="bracket"></div>
+</main>
+
+<script>
+const EMOJIS={'USA':'🇺🇸','MEX':'🇲🇽','CAN':'🇨🇦','ARG':'🇦🇷','BRA':'🇧🇷','FRA':'🇫🇷','ENG':'🇬🇧','ESP':'🇪🇸','GER':'🇩🇪','ITA':'🇮🇹','NLD':'🇳🇱','BEL':'🇧🇪','POR':'🇵🇹','SWE':'🇸🇪','POL':'🇵🇱','CRO':'🇭🇷','JPN':'🇯🇵','KOR':'🇰🇷','AUS':'🇦🇺','NZL':'🇳🇿','CHN':'🇨🇳','VIE':'🇻🇳','THA':'🇹🇭','IRN':'🇮🇷','KSA':'🇸🇦','EGY':'🇪🇬','SEN':'🇸🇳','GHA':'🇬🇭','CMR':'🇨🇲','NGA':'🇳🇬','CIV':'🇨🇮','TUN':'🇹🇳','MAR':'🇲🇦','ZAF':'🇿🇦','UKR':'🇺🇦','ISR':'🇮🇱'};
+
+const BRACKETS=[
+  {name:'Round of 32',teams:[['USA',''],['MEX',''],['CAN',''],['ARG',''],['BRA',''],['FRA',''],['ENG',''],['ESP',''],['GER',''],['ITA',''],['NLD',''],['BEL',''],['POR',''],['SWE',''],['POL',''],['CRO','']]},
+  {name:'Quarterfinals',teams:[[],[], [], [], [], [], [], []]},
+  {name:'Semifinals',teams:[[],[], [], []]},
+  {name:'Final',teams:[[],[]]},
+];
+
+async function fetchKO(){
+  try{
+    const r=await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa-world-cup');
+    const j=await r.json();
+    for(const e of j.events||[]){
+      const s=e.status.type.name;
+      if(!s.includes('FINAL')&&!s.includes('16')&&!s.includes('SF')&&!s.includes('QF')) continue;
+      const[h,a]=e.competitors||[];
+      if(!h||!a)continue;
+      const st=s.includes('LIVE')||s.includes('IN_PROGRESS')?'LIVE':s.includes('FINAL')?'FT':'upcoming';
+      console.log('Match:',h.team.abbreviation,a.team.abbreviation,st);
+    }
+  }catch(e){console.error(e)}
+}
+
+function render(){
+  let h='';
+  for(const r of BRACKETS){
+    h+=`<div class="round"><div class="round-title">${r.name}</div>`;
+    for(const m of r.teams){
+      const live=false;
+      const c1=m[0]||'',c2=m[1]||'';
+      h+=`<div class="match ${live?'live':''}">
+        <div class="match-status">${c1&&c2?'vs':'TBD'}</div>
+        <div class="team"><span class="flag">${EMOJIS[c1]||'🏳️'}</span><span class="name">${c1||'TBD'}</span><span class="score">-</span></div>
+        <div class="team"><span class="flag">${EMOJIS[c2]||'🏳️'}</span><span class="name">${c2||'TBD'}</span><span class="score">-</span></div>
+      </div>`;
+    }
+    h+='</div>';
+  }
+  document.getElementById('bracket').innerHTML=h;
+  document.getElementById('loading').style.display='none';
+}
+
+async function refresh(){
+  try{
+    await fetchKO();
+    render();
+    const now=new Date();
+    document.getElementById('upd').textContent=now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    return 30*60*1000;
+  }catch(e){
+    console.error(e);
+    return 60000;
+  }
+}
+
+async function loop(){
+  const w=await refresh();
+  setTimeout(loop,w);
+}
+
+loop();
+</script>
+</body>
+</html>

@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FIFA World Cup 2026 Bracket</title>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@700&display=swap" rel="stylesheet">
+<style>
+:root { --gold:#FFD700; --red:#E31937; --green:#00c97a; --bg:#07101f; --bg2:#0f1c30; --border:#1e2f4a; --text:#dde5f5; --muted:#5a7090; }
+* { box-sizing:border-box; margin:0; padding:0; }
+body { background:var(--bg); color:var(--text); font-family:Arial,sans-serif; overflow:hidden; height:100vh; }
+
+header { background:linear-gradient(135deg,var(--bg2),#091528); border-bottom:3px solid var(--gold); padding:12px 20px; display:flex; justify-content:space-between; align-items:center; height:60px; }
+header h1 { font-family:'Oswald',sans-serif; font-size:24px; color:var(--gold); margin:0; }
+header .info { font-size:12px; color:var(--muted); }
+
+#content { display:flex; height:calc(100vh - 60px - 150px); overflow-x:auto; }
+.round { display:flex; flex-direction:column; justify-content:space-around; padding:10px; background:var(--bg); }
+.round h3 { font-family:'Oswald',sans-serif; font-size:12px; color:var(--gold); text-align:center; margin-bottom:10px; }
+
+.match { background:var(--bg2); border:1px solid var(--border); border-radius:4px; padding:8px; margin:5px 0; cursor:pointer; transition:all 0.2s; min-width:200px; }
+.match:hover { border-color:var(--gold); box-shadow:0 0 10px rgba(255,215,0,0.3); }
+.match.live { border:2px solid var(--red); box-shadow:0 0 15px rgba(227,25,55,0.4); }
+.match.ft { border-color:var(--green); }
+
+.match-status { font-size:11px; color:var(--gold); font-weight:bold; text-align:center; margin-bottom:5px; text-transform:uppercase; }
+.team-row { display:flex; align-items:center; gap:5px; font-size:13px; margin:3px 0; }
+.flag { font-size:16px; min-width:20px; }
+.team-name { flex:1; font-weight:bold; }
+.team-score { font-size:14px; font-weight:bold; color:var(--gold); min-width:25px; text-align:right; }
+
+footer { background:var(--bg2); border-top:2px solid var(--border); padding:10px 20px; height:150px; overflow-y:auto; font-size:13px; }
+.ticker { margin:8px 0; padding:8px; background:var(--bg); border-left:3px solid var(--gold); }
+.ticker-title { font-weight:bold; color:var(--gold); margin-bottom:4px; }
+.ticker-content { color:var(--text); }
+
+#loading { position:fixed; inset:0; background:var(--bg); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:1000; gap:20px; }
+.spinner { font-size:60px; animation:spin 2s linear infinite; }
+@keyframes spin { 0% {transform:rotate(0deg)} 100% {transform:rotate(360deg)} }
+
+.modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:2000; align-items:center; justify-content:center; }
+.modal.open { display:flex; }
+.modal-box { background:var(--bg2); border:2px solid var(--gold); border-radius:8px; padding:30px; max-width:500px; width:90%; }
+.modal-close { float:right; font-size:24px; font-weight:bold; color:var(--gold); cursor:pointer; }
+.modal-title { font-size:24px; font-weight:bold; color:var(--gold); margin:15px 0; text-align:center; }
+.modal-match { display:flex; justify-content:space-around; align-items:center; margin:20px 0; }
+.modal-team { text-align:center; }
+.modal-flag { font-size:48px; }
+.modal-name { font-weight:bold; margin:10px 0; }
+.modal-score { font-size:36px; font-weight:bold; color:var(--gold); }
+</style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="spinner">🏆</div>
+  <div style="font-size:18px;color:var(--gold);font-weight:bold">FIFA WC 2026 Bracket</div>
+</div>
+
+<header>
+  <h1>🏆 FIFA WORLD CUP 2026 - KNOCKOUT BRACKET</h1>
+  <div class="info">
+    <div id="time">--:--:--</div>
+    <div id="update">Loading...</div>
+  </div>
+</header>
+
+<div id="content"></div>
+
+<footer>
+  <div class="ticker">
+    <div class="ticker-title">⚽ LIVE SCORES</div>
+    <div class="ticker-content" id="live-scores">Waiting for matches...</div>
+  </div>
+  <div class="ticker">
+    <div class="ticker-title">🏆 TOP TEAMS</div>
+    <div class="ticker-content" id="top-teams">Loading...</div>
+  </div>
+  <div class="ticker">
+    <div class="ticker-title">⚡ TOP SCORERS</div>
+    <div class="ticker-content" id="top-scorers">Loading...</div>
+  </div>
+</footer>
+
+<div id="modal" class="modal">
+  <div class="modal-box">
+    <span class="modal-close" onclick="document.getElementById('modal').classList.remove('open')">×</span>
+    <div class="modal-title" id="modal-title">Match Details</div>
+    <div class="modal-match" id="modal-match"></div>
+    <div style="text-align:center;color:var(--muted);font-size:12px" id="modal-time"></div>
+  </div>
+</div>
+
+<script>
+const EMOJIS = {
+  'USA':'🇺🇸','MEX':'🇲🇽','CAN':'🇨🇦','ARG':'🇦🇷','BRA':'🇧🇷','FRA':'🇫🇷',
+  'ENG':'🇬🇧','ESP':'🇪🇸','GER':'🇩🇪','ITA':'🇮🇹','NLD':'🇳🇱','BEL':'🇧🇪',
+  'POR':'🇵🇹','SWE':'🇸🇪','POL':'🇵🇱','CRO':'🇭🇷','JPN':'🇯🇵','KOR':'🇰🇷',
+  'AUS':'🇦🇺','NZL':'🇳🇿'
+};
+
+let allData = { matches: {}, teams: {}, news: [] };
+
+async function loadData() {
+  try {
+    const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa-world-cup');
+    const data = await res.json();
+    
+    allData.news = data.articles?.slice(0, 5) || [];
+    allData.matches = {};
+    allData.teams = {};
+    
+    // Parse events
+    for (const event of data.events || []) {
+      const [home, away] = event.competitors || [];
+      if (!home || !away) continue;
+      
+      const h = home.team.abbreviation;
+      const a = away.team.abbreviation;
+      const hs = parseInt(home.score) || 0;
+      const as = parseInt(away.score) || 0;
+      const status = event.status.type.name.includes('LIVE') ? 'LIVE' : 
+                     event.status.type.name.includes('FINAL') ? 'FT' : 'upcoming';
+      
+      const key = `${h}-${a}`;
+      allData.matches[key] = {
+        h, a, hs, as, status,
+        hname: home.team.displayName,
+        aname: away.team.displayName,
+        date: new Date(event.date)
+      };
+      
+      // Track teams
+      if (!allData.teams[h]) allData.teams[h] = { name: home.team.displayName, gf: 0, ga: 0, pts: 0 };
+      if (!allData.teams[a]) allData.teams[a] = { name: away.team.displayName, gf: 0, ga: 0, pts: 0 };
+      
+      allData.teams[h].gf += hs;
+      allData.teams[h].ga += as;
+      allData.teams[a].gf += as;
+      allData.teams[a].ga += hs;
+      
+      if (status === 'FT') {
+        if (hs > as) allData.teams[h].pts += 3;
+        else if (as > hs) allData.teams[a].pts += 3;
+        else { allData.teams[h].pts++; allData.teams[a].pts++; }
+      }
+    }
+    
+    return true;
+  } catch(e) {
+    console.error('Load error:', e);
+    return false;
+  }
+}
+
+function getMatch(t1, t2) {
+  return allData.matches[`${t1}-${t2}`] || allData.matches[`${t2}-${t1}`];
+}
+
+function renderBracket() {
+  const rounds = [
+    { name: 'Round of 32', class: 'round-r32', width: 220, teams: [['USA','MEX'],['CAN','ARG'],['BRA','FRA'],['ENG','ESP'],['GER','ITA'],['NLD','BEL'],['POR','SWE'],['POL','CRO'],['JPN','KOR'],['AUS','NZL'],[],[],[],[],[],[]] },
+    { name: 'Quarterfinals', class: 'round-qf', width: 260, teams: [[],[],[],[],[],[],[],[]] },
+    { name: 'Semifinals', class: 'round-sf', width: 300, teams: [[],[],[],[]] },
+    { name: 'Final', class: 'round-final', width: 340, teams: [[],[]] }
+  ];
+  
+  let html = '';
+  for (const round of rounds) {
+    html += `<div class="round" style="min-width:${round.width}px"><h3>${round.name}</h3>`;
+    for (const teams of round.teams) {
+      const t1 = teams[0] || '';
+      const t2 = teams[1] || '';
+      const m = getMatch(t1, t2);
+      const s1 = m?.hs || 0;
+      const s2 = m?.as || 0;
+      const live = m?.status === 'LIVE';
+      const ft = m?.status === 'FT';
+      
+      html += `<div class="match ${live?'live':''}${ft?'ft':''}" ${t1&&t2?`onclick="showMatch('${t1}','${t2}')"`:''} style="cursor:${t1?'pointer':'default'}">
+        <div class="match-status">${live?'🔴 LIVE':ft?'✓ FT':t1?'vs':'TBD'}</div>
+        <div class="team-row"><span class="flag">${EMOJIS[t1]||'🏳️'}</span><span class="team-name">${t1||'TBD'}</span><span class="team-score">${t1?s1:'-'}</span></div>
+        <div class="team-row"><span class="flag">${EMOJIS[t2]||'🏳️'}</span><span class="team-name">${t2||'TBD'}</span><span class="team-score">${t2?s2:'-'}</span></div>
+      </div>`;
+    }
+    html += '</div>';
+  }
+  document.getElementById('content').innerHTML = html;
+}
+
+function updateTickers() {
+  // Live scores
+  const live = Object.values(allData.matches).filter(m => m.status === 'LIVE').map(m => `${m.h} ${m.hs}-${m.as} ${m.a}`).join(' | ') || 'No live matches';
+  document.getElementById('live-scores').textContent = live;
+  
+  // Top teams
+  const teams = Object.entries(allData.teams).sort((a,b) => b[1].pts - a[1].pts).slice(0,8);
+  const topTeams = teams.map(([c,t]) => `${EMOJIS[c]||'🏳️'} ${c} (${t.pts}pts)`).join(' | ') || 'Loading...';
+  document.getElementById('top-teams').textContent = topTeams;
+  
+  // Top scorers
+  const scorers = Object.entries(allData.teams).sort((a,b) => b[1].gf - a[1].gf).slice(0,8);
+  const topScorers = scorers.map(([c,t]) => `${EMOJIS[c]||'🏳️'} ${c} (${t.gf}G)`).join(' | ') || 'No goals yet';
+  document.getElementById('top-scorers').textContent = topScorers;
+}
+
+function showMatch(t1, t2) {
+  const m = getMatch(t1, t2);
+  if (!m) return;
+  
+  document.getElementById('modal-match').innerHTML = `
+    <div class="modal-team"><div class="modal-flag">${EMOJIS[t1]||'🏳️'}</div><div class="modal-name">${m.hname}</div></div>
+    <div style="text-align:center;flex:0 0 auto"><div class="modal-score">${m.hs}-${m.as}</div><div style="color:var(--gold);font-weight:bold">${m.status}</div></div>
+    <div class="modal-team"><div class="modal-flag">${EMOJIS[t2]||'🏳️'}</div><div class="modal-name">${m.aname}</div></div>
+  `;
+  document.getElementById('modal-time').textContent = m.date.toLocaleString('en-US', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  document.getElementById('modal').classList.add('open');
+}
+
+function updateTime() {
+  const now = new Date();
+  document.getElementById('time').textContent = now.toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  document.getElementById('update').textContent = 'Updated: ' + now.toLocaleTimeString('en-US', {hour:'2-digit',minute:'2-digit'});
+}
+
+async function refresh() {
+  const success = await loadData();
+  if (success) {
+    renderBracket();
+    updateTickers();
+    document.getElementById('loading').style.display = 'none';
+  } else {
+    setTimeout(refresh, 10000);
+    return;
+  }
+  
+  const hasLive = Object.values(allData.matches).some(m => m.status === 'LIVE');
+  setTimeout(refresh, hasLive ? 30000 : 600000);
+}
+
+setInterval(updateTime, 1000);
+updateTime();
+refresh();
+</script>
+</body>
+</html>

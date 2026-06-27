@@ -528,9 +528,9 @@ function bracketCard(m,fm,scores,extraCls='',round=''){
   }
   const onclick=`openMatchDetail('${c1}','${c2}')`;
   return `<div class="${cls}" onclick="${onclick}">
-    <div class="bkt-team"><span class="bkt-code">${c1}</span><div class="bkt-form">${f1}</div></div>
+    <div class="bkt-team"><span class="bkt-code">${displayName(c1)}</span><div class="bkt-form">${f1}</div></div>
     <div class="bkt-mid">${midHtml}</div>
-    <div class="bkt-team"><span class="bkt-code">${c2}</span><div class="bkt-form">${f2}</div></div>
+    <div class="bkt-team"><span class="bkt-code">${displayName(c2)}</span><div class="bkt-form">${f2}</div></div>
   </div>`;
 }
 
@@ -639,7 +639,7 @@ function renderNews(news){
   } else {
     trHtml = topTeams.map((t, idx) => {
       const sign = t.gd > 0 ? '+' : '';
-      return `<span class="ti tr"><b style="color:var(--gold)">#${idx+1}</b> ${t.code} — ${t.pts} Pts <span style="color:var(--muted); font-size: 14px;">(GD: ${sign}${t.gd})</span></span>`;
+      return `<span class="ti tr"><b style="color:var(--gold)">#${idx+1}</b> ${displayName(t.code)} — ${t.pts} Pts <span style="color:var(--muted); font-size: 14px;">(GD: ${sign}${t.gd})</span></span>`;
     }).join('');
     trHtml = trHtml + trHtml;
   }
@@ -712,7 +712,7 @@ function renderScorers(scorers){
   } else {
     items=scorers.map((s,i)=>{
       const club=s.aid&&CLUB_CACHE[s.aid]?`<span class="sc-club">${CLUB_CACHE[s.aid]}</span>`:'';
-      return `<span class="ti sc"><span class="sc-rank">${i+1}.</span>${s.name}<span class="sc-team">${s.team}</span>${club}<span class="sc-goals">${s.goals}⚽</span></span>`;
+      return `<span class="ti sc"><span class="sc-rank">${i+1}.</span>${s.name}<span class="sc-team">${displayName(s.team)}</span>${club}<span class="sc-goals">${s.goals}⚽</span></span>`;
     }).join('');
     items=items+items+items;
   }
@@ -751,6 +751,16 @@ const LINEUP_CACHE = {};  // matchKey -> {rosters: [...], fetched: true}
 // Helper to get full country name
 function fullName(code){
   return FULL_NAME[code]||code;
+}
+
+// Format country name for bracket display: "Saudi Arabia" → "Saudi A.", "United Arab Emirates" → "United A.E."
+function displayName(code){
+  const full = fullName(code);
+  const parts = full.split(' ');
+  if(parts.length === 1) return full; // Single word (Brazil, Mexico, etc.)
+  // Multi-word: use first word + first letters of remaining words with dots
+  const abbrev = parts.slice(1).map(p => p[0].toUpperCase() + '.').join('');
+  return parts[0] + ' ' + abbrev;
 }
 
 async function openMatchDetail(c1,c2){

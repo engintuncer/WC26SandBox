@@ -650,6 +650,9 @@ function renderNews(news){
 let LAST_SCORERS=[];
 const CLUB_CACHE={};
 const CLUB_PENDING={};
+let LATEST_MATCHES=[];
+let LATEST_SCORES={};
+let lastGood=null;
 
 function computeScorers(matches){
   const tally={};
@@ -744,6 +747,11 @@ function tick(){
 //  Fetches & caches lineups for ANY match type
 // ═══════════════════════════════════════════════════════════════════
 const LINEUP_CACHE = {};  // matchKey -> {rosters: [...], fetched: true}
+
+// Helper to get full country name
+function fullName(code){
+  return FULL_NAME[code]||code;
+}
 
 async function openMatchDetail(c1,c2){
   const key='live:'+c1+c2;

@@ -70,6 +70,13 @@ html,body{width:100%;height:100%;background:var(--bg);color:var(--text);
 .bkt-sep{color:var(--muted);font-size:54px}
 .bkt-time{font-family:'Oswald',sans-serif;font-size:30px;color:var(--blue);font-weight:700}
 .bkt-info{font-size:30px;color:var(--muted);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* R32 — half-size fonts for crowded round */
+.bkt-match.bkt-r32 .bkt-code{font-size:30px}
+.bkt-match.bkt-r32 .bkt-time{font-size:15px}
+.bkt-match.bkt-r32 .bkt-info{font-size:15px}
+.bkt-match.bkt-r32 .bkt-score-num{font-size:35px}
+.bkt-match.bkt-r32 .bkt-sep{font-size:27px}
+.bkt-match.bkt-r32 .bkt-score-row{gap:2px}
 /* keep badge styles for overlay matchCard rendering */
 .badge{font-size:6px;font-weight:700;border-radius:2px;padding:1px 3px;text-transform:uppercase;font-family:'Oswald',sans-serif;vertical-align:middle}
 .bft{background:#003322;color:var(--green)}.blive{background:#3a0000;color:var(--live);animation:pulse 1.2s infinite}.bht{background:#2a1a00;color:var(--gold2)}
@@ -496,7 +503,7 @@ function formXO(arr,n=3){
   }).join('');
 }
 
-function bracketCard(m,fm,scores,extraCls=''){
+function bracketCard(m,fm,scores,extraCls='',round=''){
   if(!m)return `<div class="bkt-match bkt-tbd"><div class="bkt-tbd-txt">TBD</div></div>`;
   const sc=scores[m.c1+'_'+m.c2];
   const status=sc?sc[2]:m.status;
@@ -504,6 +511,7 @@ function bracketCard(m,fm,scores,extraCls=''){
   const isFt=status==='FT';
   let cls='bkt-match'+extraCls;
   if(isLive)cls+=' bkt-live'; else if(isFt)cls+=' bkt-ft';
+  if(round==='R32')cls+=' bkt-r32';
   const f1=formXO(fm[m.c1]),f2=formXO(fm[m.c2]);
   const c1=m.c1||'TBD',c2=m.c2||'TBD';
   let midHtml='';
@@ -553,19 +561,19 @@ function renderBracket(matches,scores){
   const fin=byRound.FINAL[0]||null;
   const bro=byRound.BRONZE[0]||null;
 
-  function mkCol(lbl,arr,colExtra=''){
-    const cards=arr.map(m=>bracketCard(m,fm,scores)).join('');
-    return `<div class="bkt-col${colExtra}"><div class="bkt-col-lbl">${lbl}</div><div class="bkt-cards">${cards}</div></div>`;
+  function mkCol(lbl,arr,round=''){
+    const cards=arr.map(m=>bracketCard(m,fm,scores,'',round)).join('');
+    return `<div class="bkt-col"><div class="bkt-col-lbl">${lbl}</div><div class="bkt-cards">${cards}</div></div>`;
   }
 
   const leftHalf=`<div class="bkt-half">
-    ${mkCol('R32',r32.slice(0,8))}
+    ${mkCol('R32',r32.slice(0,8),'R32')}
     ${mkCol('R16',r16.slice(0,4))}
     ${mkCol('QF',qf.slice(0,2))}
     ${mkCol('SF',sf.slice(0,1))}
   </div>`;
   const rightHalf=`<div class="bkt-half bkt-half-right">
-    ${mkCol('R32',r32.slice(8))}
+    ${mkCol('R32',r32.slice(8),'R32')}
     ${mkCol('R16',r16.slice(4))}
     ${mkCol('QF',qf.slice(2))}
     ${mkCol('SF',sf.slice(1))}

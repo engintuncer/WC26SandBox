@@ -944,7 +944,7 @@ function openGroupOverlay(g){
     if(m.form2) formByCode[m.c2]=m.form2;
   }
   let std='<table class="ovs-table"><thead><tr><th class="l">#</th><th class="l">Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Form</th><th>Pts</th></tr></thead><tbody>';
-  ranked.forEach(([flag,code,s],pos=>{
+  ranked.forEach(([flag,code,s],pos)=>{
     const gd=s.gf-s.ga; const gds=gd>0?'+'+gd:''+gd;
     const q=pos===0?'q1':pos===1?'q2':'';
     let qual='';

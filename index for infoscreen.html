@@ -1,0 +1,1476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ET Info Screen</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Exo+2:wght@200;300;400;600&display=swap" rel="stylesheet">
+<!-- EmailJS SDK (used for the optional once-a-day task email; only the PUBLIC key goes in this file) -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<!-- Supabase SDK (cloud sync: your board follows you across devices) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg:#060a0e; --panel:#0a1018; --accent:#00d4ff; --accent2:#00ff9d;
+    --accent3:#ff6b35; --text:#e0f4ff; --muted:#3a6a7a; --border:#1a2a35;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Exo 2', sans-serif;
+    height: 100vh; width: 100vw; overflow: hidden;
+    display: flex; flex-direction: column;
+    background-image:
+      radial-gradient(ellipse at 15% 50%, rgba(0,212,255,0.04) 0%, transparent 50%),
+      radial-gradient(ellipse at 85% 30%, rgba(255,107,53,0.03) 0%, transparent 50%);
+  }
+
+  .main-row { display:grid; grid-template-columns:1.4fr 1.3fr 1.3fr; flex:1; min-height:0; padding-bottom:110px; }
+  .col { border-right:1px solid rgba(255,255,255,0.04); display:flex; flex-direction:column; overflow:hidden; height:100%; }
+  .col:last-child { border-right:none; }
+  .col-header { font-family:'Share Tech Mono',monospace; font-size:0.75vw; letter-spacing:3px; text-transform:uppercase; padding:14px 18px 10px; border-bottom:1px solid var(--border); flex-shrink:0; display:flex; align-items:center; gap:8px; }
+  .add-btn { margin-left:auto; font-family:'Share Tech Mono',monospace; font-size:0.72vw; letter-spacing:1px; cursor:pointer; border:1px solid var(--border); border-radius:5px; padding:3px 11px; color:var(--text); background:rgba(255,255,255,0.04); }
+  .add-btn:hover { border-color:var(--accent); color:var(--accent); }
+  /* sort dropdown in the tasks header */
+  .sort-select { margin-left:auto; font-family:'Share Tech Mono',monospace; font-size:0.7vw; letter-spacing:1px; cursor:pointer; border:1px solid var(--border); border-radius:5px; padding:3px 8px; color:var(--text); background:#0c1622; outline:none; }
+  .sort-select:hover, .sort-select:focus { border-color:var(--accent2); color:var(--accent2); }
+  .col-header .sort-select + .add-btn { margin-left:0; }
+  .col-header .add-btn + .add-btn { margin-left:0; }
+
+  /* CLOCK */
+  .clock-col { justify-content:center; align-items:center; padding:30px 20px; position:relative; }
+  #clock-time { font-family:'Orbitron',monospace; font-size:11vw; font-weight:900; color:var(--accent); text-shadow:0 0 40px rgba(0,212,255,0.7),0 0 80px rgba(0,212,255,0.2); letter-spacing:2px; line-height:1; animation:flicker 10s ease-in-out infinite; text-align:center; white-space:nowrap; }
+  @keyframes flicker { 0%,93%,95%,97%,100%{opacity:1} 94%,96%{opacity:0.93} }
+  #clock-seconds { font-family:'Orbitron',monospace; font-size:3vw; color:rgba(0,212,255,0.35); letter-spacing:8px; margin-top:6px; text-align:center; }
+  .clock-divider { width:120px; height:1px; background:linear-gradient(90deg,transparent,var(--accent),transparent); opacity:0.3; margin:18px auto; }
+  #clock-date { font-size:1.6vw; font-weight:200; color:var(--text); letter-spacing:3px; text-align:center; opacity:0.85; }
+  #clock-day { font-family:'Share Tech Mono',monospace; font-size:0.9vw; color:var(--muted); letter-spacing:6px; text-transform:uppercase; margin-top:8px; text-align:center; }
+
+  /* SCHEDULE */
+  .sched-col { padding:0; }
+  .sched-col .col-header { color:var(--accent3); }
+  .sched-list { flex:1; overflow-y:auto; padding:8px 12px; display:flex; flex-direction:column; gap:6px; scrollbar-width:none; }
+  .sched-list::-webkit-scrollbar { display:none; }
+  .sched-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:4px; border-left:3px solid transparent; flex-shrink:0; }
+  .sched-item.done { background:rgba(255,255,255,0.02); border-left-color:rgba(74,122,138,0.3); opacity:0.4; }
+  .sched-item.upcoming { background:rgba(255,107,53,0.05); border-left-color:var(--accent3); }
+  .sched-item.active { background:rgba(255,107,53,0.12); border-left-color:var(--accent3); animation:apulse 2.5s ease-in-out infinite; }
+  @keyframes apulse { 0%,100%{background:rgba(255,107,53,0.12)} 50%{background:rgba(255,107,53,0.05)} }
+  .sched-time { font-family:'Orbitron',monospace; font-size:1vw; font-weight:700; color:var(--accent3); flex-shrink:0; min-width:70px; }
+  .sched-title { font-size:1vw; font-weight:600; color:var(--text); line-height:1.2; flex:1; }
+  .sched-badge { font-family:'Share Tech Mono',monospace; font-size:0.7vw; padding:2px 6px; border-radius:20px; flex-shrink:0; }
+  .badge-now { background:rgba(255,107,53,0.2); color:var(--accent3); border:1px solid rgba(255,107,53,0.5); animation:bnow 1.5s ease-in-out infinite; }
+  @keyframes bnow { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .badge-done { background:rgba(74,122,138,0.1); color:var(--muted); border:1px solid rgba(74,122,138,0.2); }
+  .badge-soon { background:rgba(0,212,255,0.08); color:var(--accent); border:1px solid rgba(0,212,255,0.2); }
+  .no-meetings { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; opacity:0.3; }
+  .no-meetings-icon { font-size:30px; }
+  .no-meetings-text { font-family:'Share Tech Mono',monospace; font-size:0.8vw; letter-spacing:3px; text-transform:uppercase; }
+  .up-head { font-family:'Share Tech Mono',monospace; font-size:0.62vw; letter-spacing:2px; text-transform:uppercase; color:var(--accent); opacity:0.55; padding:12px 4px 4px; border-top:1px dashed var(--border); margin-top:8px; flex-shrink:0; }
+  .up-item { display:flex; gap:10px; align-items:center; padding:6px 8px; flex-shrink:0; }
+  .up-date { font-family:'Share Tech Mono',monospace; color:var(--accent); font-size:0.72vw; min-width:64px; flex-shrink:0; }
+  .up-title { flex:1; color:var(--text); font-size:0.85vw; }
+
+  /* TASKS */
+  .tasks-col { padding:0; }
+  .tasks-col .col-header { color:var(--accent2); }
+  .task-list { flex:1; overflow-y:auto; padding:8px 12px; display:flex; flex-direction:column; gap:4px; scrollbar-width:none; }
+  .task-list::-webkit-scrollbar { display:none; }
+  .task-header { font-family:'Share Tech Mono',monospace; font-size:0.65vw; letter-spacing:2px; text-transform:uppercase; color:var(--accent2); opacity:0.6; padding:8px 4px 3px; flex-shrink:0; }
+  .task-item { display:flex; align-items:center; gap:9px; padding:8px 10px; border-radius:4px; border-left:3px solid rgba(255,255,255,0.06); flex-shrink:0; }
+  .task-item.task-done { opacity:0.4; }
+  .task-check { font-family:'Share Tech Mono',monospace; font-size:1vw; flex-shrink:0; width:18px; cursor:pointer; }
+  .task-text { font-size:0.9vw; font-weight:400; flex:1; line-height:1.3; }
+  .task-done .task-text { text-decoration:line-through; color:var(--muted); }
+  .task-badge { font-family:'Share Tech Mono',monospace; font-size:0.6vw; padding:2px 6px; border-radius:3px; flex-shrink:0; letter-spacing:1px; }
+  .task-age { font-family:'Share Tech Mono',monospace; font-size:0.58vw; padding:2px 6px; border-radius:3px; flex-shrink:0; letter-spacing:1px; margin-left:2px; }
+  .task-empty { color:var(--muted); font-family:'Share Tech Mono',monospace; font-size:0.8vw; text-align:center; padding:20px; letter-spacing:2px; }
+  .item-del, .item-edit { margin-left:6px; color:var(--muted); cursor:pointer; font-family:monospace; font-size:1vw; flex-shrink:0; opacity:0.35; line-height:1; padding:0 4px; }
+  .item-del:hover { color:var(--accent3); opacity:1; }
+  .item-edit { margin-left:10px; }
+  .item-edit:hover { color:var(--accent); opacity:1; }
+
+  /* WEATHER */
+  .weather-corner { position:fixed; top:20px; left:20px; display:flex; align-items:center; gap:12px; background:rgba(13,20,26,0.88); border:1px solid rgba(0,255,157,0.18); border-radius:10px; padding:12px 18px; z-index:200; }
+  #w-icon { font-size:100px; line-height:1; }
+  #w-temp { font-family:'Orbitron',monospace; font-size:60px; font-weight:700; color:var(--accent2); text-shadow:0 0 16px rgba(0,255,157,0.4); }
+  .w-info { display:flex; flex-direction:column; gap:4px; }
+  #w-desc { font-size:32px; color:var(--text); font-weight:300; text-transform:capitalize; }
+  #w-feels { font-family:'Share Tech Mono',monospace; font-size:16px; color:var(--muted); }
+
+  /* NEWS */
+  .news-ticker { position:fixed; bottom:0; left:0; right:0; height:110px; background:rgba(6,10,14,0.95); border-top:1px solid rgba(0,212,255,0.12); display:flex; flex-direction:column; overflow:hidden; z-index:100; }
+  .news-row { flex:1; display:flex; align-items:center; overflow:hidden; border-bottom:1px solid rgba(255,255,255,0.04); }
+  .news-row:last-child { border-bottom:none; }
+  .news-tag { font-family:'Share Tech Mono',monospace; font-size:1vw; padding:4px 12px; border-radius:3px; letter-spacing:2px; text-transform:uppercase; flex-shrink:0; margin:0 16px; }
+  .tag-lyten { background:rgba(0,212,255,0.12); color:var(--accent); border:1px solid rgba(0,212,255,0.25); }
+  .tag-battery { background:rgba(0,255,157,0.12); color:var(--accent2); border:1px solid rgba(0,255,157,0.25); }
+  .news-scroll-wrap { flex:1; overflow:hidden; height:100%; display:flex; align-items:center; }
+  .news-scroll-track { display:flex; align-items:center; white-space:nowrap; animation:scroll-news 60s linear infinite; }
+  .news-scroll-track:hover { animation-play-state:paused; }
+  @keyframes scroll-news { 0%{transform:translateX(100vw)} 100%{transform:translateX(-100%)} }
+  .news-item { font-family:'Exo 2',sans-serif; font-size:1.6vw; font-weight:600; color:var(--text); margin-right:60px; }
+  .news-dot { color:var(--accent3); margin-right:60px; font-size:10px; opacity:0.5; }
+
+  .footer { position:fixed; bottom:4px; right:12px; font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--muted); letter-spacing:2px; opacity:0.5; z-index:101; }
+  .offline-banner { position:fixed; top:0; left:50%; transform:translateX(-50%); background:rgba(255,107,53,0.15); border:1px solid rgba(255,107,53,0.4); border-top:none; color:var(--accent3); font-family:'Share Tech Mono',monospace; font-size:0.7vw; letter-spacing:3px; text-align:center; padding:5px 16px; border-radius:0 0 8px 8px; z-index:300; display:none; }
+
+  /* LOGIN GATE */
+  .login-gate { position:fixed; inset:0; z-index:600; background:var(--bg); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:20px;
+    background-image: radial-gradient(ellipse at 50% 40%, rgba(0,212,255,0.08) 0%, transparent 55%); }
+  .login-card { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:34px 30px; width:min(400px,92vw); text-align:center; box-shadow:0 14px 50px rgba(0,0,0,0.65); }
+  .login-title { font-family:'Orbitron',monospace; font-size:26px; font-weight:900; color:var(--accent); text-shadow:0 0 30px rgba(0,212,255,0.5); letter-spacing:2px; margin-bottom:6px; }
+  .login-sub { font-family:'Share Tech Mono',monospace; font-size:12px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; margin-bottom:26px; }
+  .login-gate .field { text-align:left; margin-bottom:14px; }
+  .login-btn { width:100%; font-family:'Share Tech Mono',monospace; font-size:14px; letter-spacing:1px; border-radius:8px; padding:13px; cursor:pointer; margin-top:4px; }
+  .login-google { background:#fff; color:#1a1a1a; border:none; display:flex; align-items:center; justify-content:center; gap:10px; font-weight:600; }
+  .login-google:hover { filter:brightness(0.94); }
+  .login-magic { background:rgba(0,212,255,0.15); border:1px solid var(--accent); color:var(--accent); }
+  .login-magic:hover { filter:brightness(1.25); }
+  .login-divider { display:flex; align-items:center; gap:12px; color:var(--muted); font-family:'Share Tech Mono',monospace; font-size:11px; letter-spacing:2px; margin:18px 0; }
+  .login-divider::before, .login-divider::after { content:''; flex:1; height:1px; background:var(--border); }
+  .login-msg { font-family:'Share Tech Mono',monospace; font-size:12px; letter-spacing:1px; margin-top:14px; min-height:18px; }
+  .login-msg.ok { color:var(--accent2); } .login-msg.err { color:var(--accent3); }
+  .sync-pill { position:fixed; bottom:118px; right:12px; font-family:'Share Tech Mono',monospace; font-size:10px; letter-spacing:1px; color:var(--muted); background:rgba(13,20,26,0.9); border:1px solid var(--border); border-radius:20px; padding:5px 12px; z-index:150; display:flex; align-items:center; gap:7px; opacity:0.85; }
+  .sync-dot { width:7px; height:7px; border-radius:50%; background:var(--accent2); box-shadow:0 0 8px var(--accent2); }
+  .sync-pill.saving .sync-dot { background:var(--accent3); box-shadow:0 0 8px var(--accent3); animation:bnow 0.8s ease-in-out infinite; }
+  .sign-out { cursor:pointer; text-decoration:underline; margin-left:4px; }
+  .sign-out:hover { color:var(--accent); }
+  @media (max-width:820px), (max-aspect-ratio:1/1) { .sync-pill { bottom:130px; } }
+
+  /* MODAL */
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.72); z-index:500; display:none; align-items:center; justify-content:center; }
+  .modal-overlay.show { display:flex; }
+  .modal-card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:24px; width:min(540px,92vw); box-shadow:0 14px 50px rgba(0,0,0,0.65); }
+  .modal-title { font-family:'Orbitron',monospace; font-size:20px; color:var(--accent); margin-bottom:18px; letter-spacing:1px; }
+  .field { margin-bottom:14px; display:flex; flex-direction:column; gap:6px; }
+  .field label { font-family:'Share Tech Mono',monospace; font-size:12px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
+  .field input, .field select { background:#0c1622; border:1px solid var(--border); border-radius:7px; color:var(--text); font-family:'Exo 2',sans-serif; font-size:17px; padding:11px 13px; outline:none; width:100%; }
+  .field input:focus, .field select:focus { border-color:var(--accent); }
+  .row2 { display:flex; gap:12px; } .row2 .field { flex:1; }
+  .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:6px; }
+  .log-list { max-height:55vh; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-right:4px; }
+  .log-item { display:flex; align-items:flex-start; gap:10px; padding:9px 10px; border-left:3px solid rgba(0,255,157,0.35); background:rgba(255,255,255,0.03); border-radius:5px; }
+  .log-text { flex:1; font-size:15px; line-height:1.25; }
+  .log-date { font-family:'Share Tech Mono',monospace; font-size:11px; color:var(--muted); margin-top:3px; }
+  .log-removed { border-left-color:rgba(255,107,53,0.45); }
+  .log-empty { color:var(--muted); font-family:'Share Tech Mono',monospace; font-size:13px; text-align:center; padding:18px; letter-spacing:2px; }
+  .log-actions { display:flex; gap:6px; flex-shrink:0; }
+  .log-restore, .log-delete { font-family:'Share Tech Mono',monospace; font-size:11px; cursor:pointer; border-radius:4px; padding:4px 7px; flex-shrink:0; }
+  .log-restore { color:var(--accent2); border:1px solid rgba(0,255,157,0.25); }
+  .log-delete { color:var(--accent3); border:1px solid rgba(255,107,53,0.25); opacity:0.75; }
+  .log-restore:hover, .log-delete:hover { filter:brightness(1.3); opacity:1; }
+  .btn { font-family:'Share Tech Mono',monospace; font-size:14px; letter-spacing:1px; border:1px solid var(--border); border-radius:7px; padding:11px 20px; cursor:pointer; background:#0c1622; color:var(--text); }
+  .btn-primary { background:rgba(0,212,255,0.15); border-color:var(--accent); color:var(--accent); }
+  .btn:hover { filter:brightness(1.25); }
+
+  /* ════════════════════════════════════════════
+     RESPONSIVE MOBILE / PORTRAIT FIX
+     Keeps desktop/TV as 3 columns, stacks on phones/tablets
+     ════════════════════════════════════════════ */
+  @media (max-width: 820px), (max-aspect-ratio: 1/1) {
+    html, body {
+      width: 100%;
+      height: auto;
+      min-height: 100vh;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    body {
+      display: block;
+      padding-bottom: 125px;
+    }
+
+    .main-row {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      height: auto;
+      padding-bottom: 0;
+    }
+
+    .col {
+      width: 100%;
+      height: auto;
+      min-height: auto;
+      overflow: visible;
+      border-right: none;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .clock-col {
+      min-height: 270px;
+      justify-content: center;
+      padding: 92px 14px 24px;
+    }
+
+    #clock-time {
+      letter-spacing: 1px;
+    }
+
+    #clock-date {
+      letter-spacing: 2px;
+    }
+
+    #clock-day {
+      letter-spacing: 4px;
+    }
+
+    .col-header {
+      font-size: 13px;
+      letter-spacing: 2px;
+      padding: 12px 12px 9px;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .add-btn {
+      font-size: 12px;
+      padding: 4px 8px;
+    }
+
+    .sort-select {
+      font-size: 12px;
+      padding: 4px 6px;
+    }
+
+    .sched-list,
+    .task-list {
+      overflow: visible;
+      max-height: none;
+      padding: 8px 10px 14px;
+    }
+
+    .sched-item,
+    .task-item {
+      padding: 10px 9px;
+      gap: 8px;
+      align-items: flex-start;
+    }
+
+    .sched-time {
+      font-size: 14px;
+      min-width: 78px;
+    }
+
+    .sched-title,
+    .task-text {
+      font-size: 15px;
+      line-height: 1.35;
+    }
+
+    .task-check,
+    .item-del,
+    .item-edit {
+      font-size: 16px;
+    }
+
+    .sched-badge,
+    .task-badge,
+    .task-age {
+      font-size: 10px;
+      white-space: nowrap;
+    }
+
+    .task-header,
+    .up-head {
+      font-size: 11px;
+      letter-spacing: 1.5px;
+    }
+
+    .up-date,
+    .up-title,
+    .task-empty,
+    .no-meetings-text {
+      font-size: 13px;
+    }
+
+    .weather-corner {
+      top: 8px;
+      left: 8px;
+      right: 8px;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 9px;
+    }
+
+    #w-icon {
+      font-size: 38px;
+    }
+
+    #w-temp {
+      font-size: 30px;
+    }
+
+    #w-desc {
+      font-size: 17px;
+    }
+
+    #w-feels {
+      font-size: 12px;
+    }
+
+    .news-ticker {
+      height: 120px;
+    }
+
+    .news-row {
+      min-height: 60px;
+    }
+
+    .news-tag {
+      font-size: 11px;
+      margin: 0 7px;
+      padding: 3px 7px;
+      letter-spacing: 1px;
+    }
+
+    .news-item {
+      font-size: 17px;
+      margin-right: 42px;
+    }
+
+    .news-dot {
+      margin-right: 42px;
+    }
+
+    .footer {
+      display: none;
+    }
+
+    .offline-banner {
+      width: 92vw;
+      font-size: 10px;
+      letter-spacing: 1px;
+      padding: 5px 10px;
+    }
+
+    .modal-card {
+      width: 94vw;
+      max-height: 88vh;
+      overflow-y: auto;
+      padding: 18px;
+    }
+
+    .row2 {
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .log-item {
+      flex-direction: column;
+    }
+
+    .log-actions {
+      width: 100%;
+      justify-content: flex-end;
+    }
+  }
+
+  /* Very small phones */
+  @media (max-width: 420px) {
+    .sched-item,
+    .task-item {
+      flex-wrap: wrap;
+    }
+
+    .sched-time {
+      min-width: 68px;
+      font-size: 13px;
+    }
+
+    .sched-title,
+    .task-text {
+      font-size: 14px;
+    }
+
+    .weather-corner {
+      align-items: center;
+    }
+
+    #w-icon {
+      font-size: 32px;
+    }
+
+    #w-temp {
+      font-size: 26px;
+    }
+
+    #w-desc {
+      font-size: 15px;
+    }
+
+    .news-item {
+      font-size: 15px;
+    }
+  }
+
+</style>
+</head>
+<body>
+
+<div class="offline-banner" id="offline-banner">⚡ WEATHER/NEWS COULDN'T REFRESH — SHOWING LAST KNOWN</div>
+
+<!-- LOGIN GATE (shown until signed in) -->
+<div class="login-gate" id="login-gate">
+  <div class="login-card">
+    <div class="login-title">ET INFO SCREEN</div>
+    <div class="login-sub">Sign in to sync your board</div>
+
+    <button class="login-btn login-google" onclick="signInGoogle()">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.8-6.8C35.6 2.4 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.3l7.9 6.1C12.4 13.2 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.5 3-2.2 5.5-4.7 7.2l7.3 5.7c4.3-4 6.7-9.9 6.7-17.4z"/><path fill="#FBBC05" d="M10.5 28.6c-.5-1.5-.8-3-.8-4.6s.3-3.1.8-4.6l-7.9-6.1C1 16.5 0 20.1 0 24s1 7.5 2.6 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.3-5.7c-2 1.4-4.6 2.2-7.9 2.2-6.3 0-11.6-3.7-13.5-9l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
+      Continue with Google
+    </button>
+
+    <div class="login-divider">OR</div>
+
+    <div class="field">
+      <label>Email — we'll send you a magic link</label>
+      <input id="magic-email" type="email" placeholder="you@example.com" autocomplete="email">
+    </div>
+    <button class="login-btn login-magic" onclick="signInMagic()">Send magic link</button>
+
+    <div class="login-msg" id="login-msg"></div>
+  </div>
+</div>
+
+<!-- SYNC STATUS PILL -->
+<div class="sync-pill" id="sync-pill" style="display:none">
+  <span class="sync-dot"></span><span id="sync-text">Synced</span>
+  <span class="sign-out" id="sign-out-btn" onclick="signOut()">sign out</span>
+</div>
+
+<div class="main-row">
+  <!-- CLOCK -->
+  <div class="col clock-col">
+    <div id="clock-time">00:00</div>
+    <div id="clock-seconds">00</div>
+    <div class="clock-divider"></div>
+    <div id="clock-date">--</div>
+    <div id="clock-day">---</div>
+  </div>
+
+  <!-- SCHEDULE -->
+  <div class="col sched-col">
+    <div class="col-header">◈ Schedule · <span id="sched-day">---</span>
+      <span class="add-btn" onclick="openSchedModal()">+ ADD</span>
+    </div>
+    <div class="sched-list" id="sched-list"></div>
+  </div>
+
+  <!-- TASKS -->
+  <div class="col tasks-col">
+    <div class="col-header">◈ Tasks
+      <select class="sort-select" id="task-sort" onchange="setTaskSort(this.value)" title="Sort open tasks">
+        <option value="oldest">Oldest first</option>
+        <option value="newest">Newest first</option>
+        <option value="priority_high">High → Low</option>
+        <option value="priority_low">Low → High</option>
+        <option value="az">A → Z</option>
+      </select>
+      <span class="add-btn" onclick="openCompletedModal()">DONE LOG</span>
+      <span class="add-btn" onclick="openTaskModal()">+ ADD</span>
+    </div>
+    <div class="task-list" id="task-list"></div>
+  </div>
+</div>
+
+<!-- WEATHER -->
+<div class="weather-corner">
+  <div id="w-icon">🌡️</div>
+  <div id="w-temp">--</div>
+  <div class="w-info">
+    <div id="w-desc">Loading…</div>
+    <div id="w-feels"></div>
+  </div>
+</div>
+
+<!-- NEWS -->
+<div class="news-ticker">
+  <div class="news-row">
+    <span class="news-tag tag-lyten">LYTEN</span>
+    <div class="news-scroll-wrap"><div class="news-scroll-track" id="ticker-lyten"></div></div>
+  </div>
+  <div class="news-row">
+    <span class="news-tag tag-battery">BATTERY</span>
+    <div class="news-scroll-wrap"><div class="news-scroll-track" id="ticker-battery"></div></div>
+  </div>
+</div>
+
+<div class="footer" id="footer">LOCAL MODE · SAVED ON THIS SCREEN</div>
+
+<!-- ADD TASK MODAL -->
+<div class="modal-overlay" id="task-modal">
+  <div class="modal-card">
+    <div class="modal-title" id="tk-modal-title">Add task</div>
+    <div class="field">
+      <label>Task</label>
+      <input id="tk-text" type="text" placeholder="What needs doing?">
+    </div>
+    <div class="field">
+      <label>Priority</label>
+      <select id="tk-priority">
+        <option value="">None</option>
+        <option value="HIGH">High</option>
+        <option value="MED">Medium</option>
+        <option value="LOW">Low</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <span class="btn" onclick="closeModal('task-modal')">Cancel</span>
+      <span class="btn btn-primary" id="tk-save-btn" onclick="saveTask()">Add</span>
+    </div>
+  </div>
+</div>
+
+<!-- COMPLETED TASK LOG MODAL -->
+<div class="modal-overlay" id="completed-modal">
+  <div class="modal-card">
+    <div class="modal-title">Task log — completed &amp; removed</div>
+    <div class="log-list" id="completed-list"></div>
+    <div class="modal-actions">
+      <span class="btn" onclick="closeModal('completed-modal')">Close</span>
+    </div>
+  </div>
+</div>
+
+<!-- ADD SCHEDULE MODAL -->
+<div class="modal-overlay" id="sched-modal">
+  <div class="modal-card">
+    <div class="modal-title" id="sc-modal-title">Add schedule item</div>
+    <div class="field">
+      <label>Title</label>
+      <input id="sc-title" type="text" placeholder="Meeting / event name">
+    </div>
+    <div class="row2">
+      <div class="field"><label>Start</label><input id="sc-start" type="time"></div>
+      <div class="field"><label>End (optional)</label><input id="sc-end" type="time"></div>
+    </div>
+    <div class="field">
+      <label>Repeat</label>
+      <select id="sc-recur" onchange="onRecurChange()">
+        <option value="once">Once — on a date</option>
+        <option value="daily">Every day</option>
+        <option value="weekly">Every week on…</option>
+      </select>
+    </div>
+    <div class="field" id="sc-date-field">
+      <label>Date</label>
+      <input id="sc-date" type="date">
+    </div>
+    <div class="field" id="sc-weekday-field" style="display:none">
+      <label>Weekday</label>
+      <select id="sc-weekday">
+        <option value="1">Monday</option><option value="2">Tuesday</option>
+        <option value="3">Wednesday</option><option value="4">Thursday</option>
+        <option value="5">Friday</option><option value="6">Saturday</option>
+        <option value="0">Sunday</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <span class="btn" onclick="closeModal('sched-modal')">Cancel</span>
+      <span class="btn btn-primary" id="sc-save-btn" onclick="saveSched()">Add</span>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════
+   SUPABASE  ← paste your two values here (Stage 1)
+   ─────────────────────────────────────────────
+   Get these from: Supabase dashboard → your project →
+   Settings (gear) → API.
+     • Project URL          → SUPABASE_URL below
+     • Project API keys → "anon public"  → SUPABASE_ANON_KEY below
+   The anon key is DESIGNED to be public and safe to commit —
+   Row Level Security in the database is what actually protects
+   your data, not secrecy of this key.
+   ════════════════════════════════════════════ */
+const SUPABASE_URL      = "https://bkydkzzabykiqcsmdszf.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_V6qlMkdAgVk_rDU67D7GLw_Rm7I_cbW";
+
+const CFG = {
+  weatherKey:    "f9604a8d33f27e5881de371e0d2bc27d",
+  weatherCity:   "San Jose",
+  weatherCountry:"US",
+  weatherLat:    37.3382,      // San Jose latitude — no weather API key needed
+  weatherLon:   -121.8863,     // San Jose longitude — no weather API key needed
+  weatherUnits:  "imperial",   // "metric" for °C
+  tempUnit:      "°F",         // "°C" for metric
+  refreshMinutes: 10,          // weather + news refresh interval
+  news: {
+    lyten: "https://news.google.com/rss/search?q=Lyten+battery&hl=en-US&gl=US&ceid=US:en",
+    /* Battery row. Several feeds merged and de-duplicated, so the ticker stays full
+       even when one topic is quiet — that was the old DLE row's weakness. The last
+       entry keeps the lithium-supply coverage the DLE row used to provide. */
+    battery: [
+      "https://news.google.com/rss/search?q=%22battery+technology%22+OR+%22battery+manufacturing%22&hl=en-US&gl=US&ceid=US:en",
+      "https://news.google.com/rss/search?q=%22solid-state+battery%22+OR+%22lithium-sulfur%22+OR+%22sodium-ion%22&hl=en-US&gl=US&ceid=US:en",
+      "https://news.google.com/rss/search?q=%22EV+battery%22+OR+gigafactory&hl=en-US&gl=US&ceid=US:en",
+      "https://news.google.com/rss/search?q=%22battery+storage%22+OR+%22grid+storage%22&hl=en-US&gl=US&ceid=US:en",
+      "https://news.google.com/rss/search?q=%22direct+lithium+extraction%22+OR+%22lithium+brine%22&hl=en-US&gl=US&ceid=US:en"
+    ]
+  }
+};
+
+/* ════════════════════════════════════════════
+   DAILY TASK EMAIL  (optional — uses EmailJS)
+   ─────────────────────────────────────────────
+   IMPORTANT — DO NOT put your AOL password here.
+   This file is public on GitHub Pages; anything in it
+   can be read by anyone. EmailJS is built for this:
+   you connect your AOL account on emailjs.com, and only
+   the PUBLIC key below ever lands in this file. Your real
+   mailbox login stays on EmailJS's servers, never here.
+
+   Setup (~5 min) — see the notes I sent with this file:
+     1. Make a free account at emailjs.com
+     2. Add an email service (connect AOL / any provider)  -> SERVICE ID
+     3. Make a template with {{subject}}, {{to_email}}, {{message}} -> TEMPLATE ID
+     4. Copy your Public Key from Account > General
+     5. Paste the three values below and set enabled:true
+
+   Limitation: this only sends while the browser tab is OPEN.
+   If the screen is off at sendAt time, it sends on the first
+   open AFTER that time the same day. It cannot send while the
+   browser is closed (no page = no code running).
+   ════════════════════════════════════════════ */
+const EMAIL_CFG = {
+  enabled:    false,                       // flip to true once the 3 IDs below are filled
+  publicKey:  "n0Xby3cc2VIXS6Onp",   // public — safe to commit
+  serviceId:  "service_6cpielb",
+  // BUG: this is the SERVICE id pasted twice. The daily email will fail until it is
+  // replaced with the TEMPLATE id from emailjs.com (it starts with "template_").
+  templateId: "service_6cpielb",
+  toEmail:    "engin.tuncer@lyten.com",               // where the daily digest goes
+  sendAtHour:   7,                         // 24-hour local time, e.g. 7 = 7:00 AM
+  sendAtMinute: 0,
+  includeDoneToday: false                  // also list tasks completed today?
+};
+
+const WEATHER_ICONS = {
+  '01d':'☀️','01n':'🌙','02d':'⛅','02n':'⛅','03d':'☁️','03n':'☁️',
+  '04d':'☁️','04n':'☁️','09d':'🌧️','09n':'🌧️','10d':'🌦️','10n':'🌧️',
+  '11d':'⛈️','11n':'⛈️','13d':'❄️','13n':'❄️','50d':'🌫️','50n':'🌫️'
+};
+const WMO_WEATHER = {
+  0:['☀️','Clear sky'], 1:['🌤️','Mainly clear'], 2:['⛅','Partly cloudy'], 3:['☁️','Overcast'],
+  45:['🌫️','Fog'], 48:['🌫️','Depositing rime fog'], 51:['🌦️','Light drizzle'], 53:['🌦️','Drizzle'],
+  55:['🌧️','Heavy drizzle'], 61:['🌧️','Light rain'], 63:['🌧️','Rain'], 65:['🌧️','Heavy rain'],
+  71:['❄️','Light snow'], 73:['❄️','Snow'], 75:['❄️','Heavy snow'], 80:['🌦️','Light showers'],
+  81:['🌧️','Showers'], 82:['🌧️','Heavy showers'], 95:['⛈️','Thunderstorm'], 96:['⛈️','Thunderstorm with hail'], 99:['⛈️','Thunderstorm with hail']
+};
+
+/* Seed data — used the FIRST time only. After that your saved edits win. */
+
+/* What a BRAND-NEW user's board starts with — neutral, no personal data.
+   (Your own board already has your real data saved in the cloud, so this
+   never overwrites it; it only applies to first-ever empty boards.) */
+const _today = new Date().toISOString().slice(0, 10);   // YYYY-MM-DD, no helper needed here
+const WELCOME_TASKS = [
+  { id: 'w1', header: false, done: false, text: 'Welcome! Tap + ADD to create your first task', priority: '', created: _today }
+];
+const WELCOME_SCHEDULE = [];   // new users start with a clear day
+
+/* ════════════════════════════════════════════
+   STORAGE  (cloud via Supabase, mirrored to this
+   browser so the screen paints instantly and keeps
+   working if the network hiccups)
+   ─────────────────────────────────────────────
+   How it works:
+     • On login we pull your board's data from Supabase.
+     • Every save writes to localStorage IMMEDIATELY (instant, offline-safe)
+       and pushes to Supabase in the background.
+     • Your render functions never changed — they still read the same
+       `schedule` / `tasks` / `completedTasks` / `taskSort` variables.
+   ════════════════════════════════════════════ */
+const LS = { sched: 'dle_schedule_v1', tasks: 'dle_tasks_v1', completed: 'dle_completed_tasks_v1', sort: 'dle_task_sort_v1', lastEmail: 'dle_last_email_v1' };
+const COMPLETED_GRACE_MS = 30 * 60 * 1000;   // completed tasks stay visible for undo for 30 minutes
+
+/* Who gets credited on a done / removed action. Google logins carry a display
+   name; magic-link logins fall back to the part before the @. Short on purpose —
+   this has to be readable on a TV across the room. */
+function whoAmI() {
+  if (!currentUser) return '';
+  const m = currentUser.user_metadata || {};
+  const name = (m.full_name || m.name || '').trim();
+  if (name) return name.split(' ')[0];
+  const email = (currentUser.email || '').trim();
+  return email ? email.split('@')[0] : '';
+}
+function byLine(who) { return who ? ` · by ${esc(who)}` : ''; }
+let memFallback = {};
+function load(key, fallback) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch (e) { return memFallback[key] !== undefined ? memFallback[key] : fallback; }
+}
+function save(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); }
+  catch (e) { memFallback[key] = val; }
+}
+
+/* ---- Supabase client + current board state ---- */
+let sb = null;                 // the Supabase client (created after SDK loads)
+let currentUser = null;        // logged-in user
+let currentBoardId = null;     // the board we're reading/writing
+const cloudConfigured = () =>
+  SUPABASE_URL.startsWith('http') && SUPABASE_ANON_KEY.length > 20;
+
+// Maps our four collections to a board_data "key" column value.
+const CLOUD_KEY = { schedule: 'schedule', tasks: 'tasks', completed: 'completed', sort: 'sort' };
+
+// Push one collection up to Supabase (fire-and-forget, with a status pill).
+async function cloudPush(key, value) {
+  if (!sb || !currentBoardId) return;
+  setSync('saving');
+  try {
+    const { error } = await sb.from('board_data').upsert(
+      { board_id: currentBoardId, key, value, updated_at: new Date().toISOString() },
+      { onConflict: 'board_id,key' }
+    );
+    if (error) throw error;
+    setSync('synced');
+  } catch (e) {
+    console.warn('Cloud push failed (' + key + '):', e.message || e);
+    setSync('offline');
+  }
+}
+
+// Pull the whole board down from Supabase into our in-memory vars.
+async function cloudPullBoard() {
+  if (!sb || !currentBoardId) return false;
+  try {
+    const { data, error } = await sb.from('board_data')
+      .select('key,value').eq('board_id', currentBoardId);
+    if (error) throw error;
+    const map = {};
+    (data || []).forEach(r => { map[r.key] = r.value; });
+
+    // First-ever login on a brand-new board: seed it with a neutral welcome
+    // (NOT anyone's personal data), then push those seeds up.
+    const isEmpty = !data || data.length === 0;
+    if (isEmpty) {
+      schedule = WELCOME_SCHEDULE; tasks = WELCOME_TASKS; completedTasks = []; taskSort = 'oldest';
+      await Promise.all([
+        cloudPush('schedule', schedule), cloudPush('tasks', tasks),
+        cloudPush('completed', completedTasks), cloudPush('sort', taskSort)
+      ]);
+    } else {
+      schedule      = Array.isArray(map.schedule)  ? map.schedule  : WELCOME_SCHEDULE;
+      tasks         = Array.isArray(map.tasks)     ? map.tasks     : WELCOME_TASKS;
+      completedTasks= Array.isArray(map.completed) ? map.completed : [];
+      taskSort      = typeof map.sort === 'string' ? map.sort : (map.sort && map.sort.value) || 'oldest';
+    }
+    // mirror locally so a refresh/offline still shows the latest
+    save(LS.sched, schedule); save(LS.tasks, tasks);
+    save(LS.completed, completedTasks); save(LS.sort, taskSort);
+    setSync('synced');
+    return true;
+  } catch (e) {
+    console.warn('Cloud pull failed, using local copy:', e.message || e);
+    setSync('offline');
+    return false;
+  }
+}
+
+// Sync-status pill helper
+function setSync(state) {
+  const pill = document.getElementById('sync-pill');
+  const txt = document.getElementById('sync-text');
+  if (!pill || !txt) return;
+  pill.classList.toggle('saving', state === 'saving');
+  txt.textContent = state === 'saving' ? 'Saving…' : state === 'offline' ? 'Offline — saved here' : 'Synced';
+}
+
+/* ---- Start from the local mirror so the screen paints instantly.
+        cloudPullBoard() replaces these the moment login completes.
+        Fallback is the neutral welcome, so a not-yet-logged-in visitor
+        on a fresh browser never sees anyone else's data. ---- */
+let schedule = load(LS.sched, WELCOME_SCHEDULE);
+let tasks    = load(LS.tasks, WELCOME_TASKS);
+let completedTasks = load(LS.completed, []);
+let taskSort = load(LS.sort, 'oldest');
+let editingTaskId = null;      // set while the task modal is in edit mode
+let editingSchedId = null;     // set while the schedule modal is in edit mode
+
+/* ---- The four save functions your code already calls everywhere.
+        Now each one saves locally AND pushes to the cloud. ---- */
+const saveSchedule = () => { save(LS.sched, schedule); cloudPush('schedule', schedule); };
+const saveTasks    = () => { save(LS.tasks, tasks); cloudPush('tasks', tasks); };
+const saveCompletedTasks = () => { save(LS.completed, completedTasks); cloudPush('completed', completedTasks); };
+
+/* ════════════════════════════════════════════
+   HELPERS
+   ════════════════════════════════════════════ */
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+const pad = n => String(n).padStart(2, '0');
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const fmtTime = t => { const [h, m] = t.split(':').map(Number); return (h % 12 || 12) + ':' + pad(m) + ' ' + (h >= 12 ? 'PM' : 'AM'); };
+
+const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function daysOpen(created) {
+  if (!created) return null;
+  const d = new Date(created + 'T00:00:00');
+  if (isNaN(d)) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return Math.floor((today - d) / 86400000);
+}
+
+/* ════════════════════════════════════════════
+   TASKS
+   ════════════════════════════════════════════ */
+const PRIORITY_STYLE = {
+  HIGH: ['rgba(255,80,80,0.15)','rgba(255,80,80,0.5)','#ff5050'],
+  MED:  ['rgba(255,165,0,0.10)','rgba(255,165,0,0.4)','#ffa500'],
+  LOW:  ['rgba(0,212,255,0.06)','rgba(0,212,255,0.2)','#00d4ff'],
+};
+const PRIORITY_RANK = { HIGH: 0, MED: 1, LOW: 2, '': 3 };
+const SORT_LABEL = {
+  oldest: 'OPEN TASKS — OLDEST FIRST',
+  newest: 'OPEN TASKS — NEWEST FIRST',
+  priority_high: 'OPEN TASKS — HIGH PRIORITY FIRST',
+  priority_low: 'OPEN TASKS — LOW PRIORITY FIRST',
+  az: 'OPEN TASKS — A → Z'
+};
+function daysBadge(days, done) {
+  if (days === null || days === undefined || done) return '';
+  let label = days <= 0 ? 'today' : days === 1 ? '1 day' : `${days}d open`;
+  let c, bg, br;
+  if (days <= 2)       { c='#00ff9d'; bg='rgba(0,255,157,0.10)'; br='rgba(0,255,157,0.35)'; }
+  else if (days <= 7)  { c='#ffe066'; bg='rgba(255,224,102,0.10)'; br='rgba(255,224,102,0.35)'; }
+  else if (days <= 14) { c='#ffa500'; bg='rgba(255,165,0,0.10)'; br='rgba(255,165,0,0.40)'; }
+  else                 { c='#ff5050'; bg='rgba(255,80,80,0.12)'; br='rgba(255,80,80,0.45)'; }
+  return `<span class="task-age" style="color:${c};background:${bg};border:1px solid ${br}">${label}</span>`;
+}
+function taskSortDate(t) {
+  return t.created || '9999-12-31';
+}
+function rankOf(t) { return PRIORITY_RANK[t.priority || ''] ?? 3; }
+function sortOpenTasks(arr) {
+  const byOldest = (a, b) => taskSortDate(a).localeCompare(taskSortDate(b));
+  switch (taskSort) {
+    case 'newest':        return arr.sort((a, b) => taskSortDate(b).localeCompare(taskSortDate(a)));
+    case 'priority_high': return arr.sort((a, b) => (rankOf(a) - rankOf(b)) || byOldest(a, b));
+    case 'priority_low':  return arr.sort((a, b) => (rankOf(b) - rankOf(a)) || byOldest(a, b));
+    case 'az':            return arr.sort((a, b) => String(a.text).localeCompare(String(b.text)));
+    case 'oldest':
+    default:              return arr.sort(byOldest);
+  }
+}
+function setTaskSort(mode) {
+  taskSort = mode;
+  save(LS.sort, mode);
+  cloudPush('sort', mode);
+  renderTasks();
+}
+function archiveExpiredCompletedTasks() {
+  const now = Date.now();
+  let changed = false;
+  tasks = tasks.filter(t => {
+    if (t.header) return true;
+    if (!t.done) return true;
+    if (!t.completedAt) { t.completedAt = new Date().toISOString(); changed = true; return true; }
+    const doneTime = new Date(t.completedAt).getTime();
+    if (!isNaN(doneTime) && now - doneTime >= COMPLETED_GRACE_MS) {
+      completedTasks.unshift({ ...t, archivedAt: new Date().toISOString() });
+      changed = true;
+      return false;
+    }
+    return true;
+  });
+  // Remove empty headers after completed tasks are archived.
+  tasks = tasks.filter((t, i, arr) => !t.header || arr.some((x, j) => j > i && !x.header && (arr.slice(i + 1, j).every(y => !y.header))));
+  if (changed) { saveTasks(); saveCompletedTasks(); }
+}
+function organizedTasksForDisplay() {
+  const open = sortOpenTasks(tasks.filter(t => !t.header && !t.done));
+  const recentlyDone = tasks.filter(t => !t.header && t.done).sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
+  const out = [];
+  if (open.length) out.push({ header:true, text: SORT_LABEL[taskSort] || SORT_LABEL.oldest }, ...open);
+  if (recentlyDone.length) out.push({ header:true, text:'DONE — UNDO AVAILABLE FOR 30 MIN' }, ...recentlyDone);
+  return out;
+}
+function renderTasks() {
+  archiveExpiredCompletedTasks();
+  const sel = document.getElementById('task-sort');
+  if (sel && sel.value !== taskSort) sel.value = taskSort;
+  const el = document.getElementById('task-list');
+  const shown = organizedTasksForDisplay();
+  if (!shown.length) { el.innerHTML = '<div class="task-empty">No open tasks — tap + ADD</div>'; return; }
+  el.innerHTML = shown.map(t => {
+    if (t.header) return `<div class="task-header">${esc(t.text)}</div>`;
+    const pr = PRIORITY_STYLE[t.priority] || ['','',''];
+    const bgStyle = t.priority ? `background:${pr[0]};border-left-color:${pr[2]};` : '';
+    const badge = t.priority ? `<span class="task-badge" style="background:${pr[0]};border:1px solid ${pr[1]};color:${pr[2]}">${t.priority}</span>` : '';
+    const age = daysBadge(daysOpen(t.created), t.done);
+    const sym = t.done ? '✓' : '○';
+    const col = t.done ? '#00ff9d' : 'rgba(255,255,255,0.25)';
+    return `<div class="task-item${t.done ? ' task-done' : ''}" style="${bgStyle}">`
+         + `<span class="task-check" style="color:${col}" onclick="toggleTask('${t.id}')">${sym}</span>`
+         + `<span class="task-text">${esc(t.text)}</span>${badge}${age}`
+         + `<span class="item-edit" onclick="openTaskModal('${t.id}')" title="Edit">✎</span>`
+         + `<span class="item-del" onclick="delTask('${t.id}')" title="Remove to log">✕</span></div>`;
+  }).join('');
+}
+function toggleTask(id) {
+  const t = tasks.find(x => x.id === id);
+  if (t) {
+    t.done = !t.done;
+    if (t.done) { t.completedAt = new Date().toISOString(); t.completedBy = whoAmI(); }
+    else { delete t.completedAt; delete t.completedBy; }
+    saveTasks();
+    renderTasks();
+  }
+}
+/* The X used to be an instant, unrecoverable delete. It now moves the task into
+   the Done Log marked as removed rather than completed, so it can be restored. */
+function delTask(id) {
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+  const now = new Date().toISOString();
+  completedTasks.unshift({ ...t, removed: true, removedAt: now, removedBy: whoAmI(), archivedAt: now });
+  tasks = tasks.filter(x => x.id !== id);
+  saveTasks(); saveCompletedTasks(); renderTasks();
+}
+function openCompletedModal() {
+  archiveExpiredCompletedTasks();
+  const el = document.getElementById('completed-list');
+  if (!completedTasks.length) {
+    el.innerHTML = '<div class="log-empty">Nothing in the log yet</div>';
+  } else {
+    el.innerHTML = completedTasks.map(t => {
+      const stamp = t.removed ? (t.removedAt || t.archivedAt) : t.completedAt;
+      const d = stamp ? new Date(stamp) : null;
+      const when = d && !isNaN(d) ? d.toLocaleString('en-US', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+      const badge = t.priority ? ` · ${esc(t.priority)}` : '';
+      const verb = t.removed ? 'Removed' : 'Completed';
+      const who  = byLine(t.removed ? t.removedBy : t.completedBy);
+      return `<div class="log-item${t.removed ? ' log-removed' : ''}"><div class="log-text">${esc(t.text)}`
+           + `<div class="log-date">${verb} ${esc(when)}${badge}${who}</div></div>`
+           + `<div class="log-actions"><span class="log-restore" onclick="restoreCompletedTask('${t.id}')">RESTORE</span>`
+           + `<span class="log-delete" onclick="deleteCompletedTask('${t.id}')">DELETE</span></div></div>`;
+    }).join('');
+  }
+  document.getElementById('completed-modal').classList.add('show');
+}
+function restoreCompletedTask(id) {
+  const t = completedTasks.find(x => x.id === id);
+  if (!t) return;
+  completedTasks = completedTasks.filter(x => x.id !== id);
+  t.done = false;
+  delete t.completedAt;
+  delete t.completedBy;
+  delete t.archivedAt;
+  delete t.removed;
+  delete t.removedAt;
+  delete t.removedBy;
+  tasks.unshift(t);
+  saveCompletedTasks();
+  saveTasks();
+  openCompletedModal();
+  renderTasks();
+}
+function deleteCompletedTask(id) {
+  completedTasks = completedTasks.filter(x => x.id !== id);
+  saveCompletedTasks();
+  openCompletedModal();
+}
+
+function openTaskModal(id) {
+  const t = id ? tasks.find(x => x.id === id) : null;
+  editingTaskId = t ? t.id : null;
+  document.getElementById('tk-modal-title').textContent = t ? 'Edit task' : 'Add task';
+  document.getElementById('tk-save-btn').textContent    = t ? 'Save' : 'Add';
+  document.getElementById('tk-text').value     = t ? t.text : '';
+  document.getElementById('tk-priority').value = t ? (t.priority || '') : '';
+  document.getElementById('task-modal').classList.add('show');
+  setTimeout(() => document.getElementById('tk-text').focus(), 50);
+}
+function saveTask() {
+  const text = document.getElementById('tk-text').value.trim();
+  if (!text) { document.getElementById('tk-text').focus(); return; }
+  const priority = document.getElementById('tk-priority').value;
+  if (editingTaskId) {
+    const t = tasks.find(x => x.id === editingTaskId);
+    if (t) { t.text = text; t.priority = priority; }
+  } else {
+    tasks.unshift({ id: uid(), header: false, done: false, text, priority,
+                    created: ymd(new Date()) });
+  }
+  editingTaskId = null;
+  saveTasks(); renderTasks(); closeModal('task-modal');
+}
+
+/* ════════════════════════════════════════════
+   SCHEDULE
+   ════════════════════════════════════════════ */
+function itemsForToday(now) {
+  const wd = now.getDay(), today = ymd(now);
+  return schedule.filter(s =>
+    s.recur === 'daily' ||
+    (s.recur === 'weekly' && Number(s.weekday) === wd) ||
+    (s.recur === 'once' && s.date === today)
+  ).sort((a, b) => a.start.localeCompare(b.start));
+}
+function upcomingItems(now) {
+  const today = ymd(now);
+  return schedule.filter(s => s.recur === 'once' && s.date > today)
+                 .sort((a, b) => (a.date + a.start).localeCompare(b.date + b.start))
+                 .slice(0, 8);
+}
+function renderSchedule(now) {
+  const list = document.getElementById('sched-list');
+  const meetings = itemsForToday(now);
+  const cur = now.getHours() * 60 + now.getMinutes();
+  let html = '';
+
+  if (!meetings.length) {
+    html += '<div class="no-meetings"><div class="no-meetings-icon">✓</div><div class="no-meetings-text">Clear day</div></div>';
+  } else {
+    html += meetings.map(mt => {
+      const s = toMin(mt.start), e = mt.end ? toMin(mt.end) : s + 30;
+      let state, badge;
+      if (cur >= e)      { state = 'done';     badge = '<span class="sched-badge badge-done">DONE</span>'; }
+      else if (cur >= s) { state = 'active';   badge = '<span class="sched-badge badge-now">● NOW</span>'; }
+      else { state = 'upcoming'; const diff = s - cur; badge = '<span class="sched-badge badge-soon">' + (diff <= 15 ? diff + 'm' : fmtTime(mt.start)) + '</span>'; }
+      const title = mt.title + (mt.location ? `  ·  ${mt.location}` : '');
+      return `<div class="sched-item ${state}">`
+           + `<div class="sched-time">${fmtTime(mt.start)}</div>`
+           + `<div class="sched-title">${esc(title)}</div>${badge}`
+           + `<span class="item-edit" onclick="openSchedModal('${mt.id}')" title="Edit">✎</span>`
+           + `<span class="item-del" onclick="delSched('${mt.id}')" title="Delete">✕</span></div>`;
+    }).join('');
+  }
+
+  const up = upcomingItems(now);
+  if (up.length) {
+    html += '<div class="up-head">▸ Upcoming</div>';
+    html += up.map(s => {
+      const d = new Date(s.date + 'T00:00:00');
+      const label = MONTHS[d.getMonth()].slice(0, 3) + ' ' + d.getDate();
+      return `<div class="up-item"><span class="up-date">${label}</span>`
+           + `<span class="up-title">${esc(fmtTime(s.start))} · ${esc(s.title)}</span>`
+           + `<span class="item-edit" onclick="openSchedModal('${s.id}')" title="Edit">✎</span>`
+           + `<span class="item-del" onclick="delSched('${s.id}')" title="Delete">✕</span></div>`;
+    }).join('');
+  }
+  list.innerHTML = html;
+}
+/* Schedule items have no archive to fall back on, so this one confirms instead. */
+function delSched(id) {
+  const s = schedule.find(x => x.id === id);
+  if (s && !confirm(`Delete "${s.title}"?\n\nSchedule items are not kept in the log.`)) return;
+  schedule = schedule.filter(x => x.id !== id);
+  saveSchedule(); renderSchedule(new Date());
+}
+
+function onRecurChange() {
+  const v = document.getElementById('sc-recur').value;
+  document.getElementById('sc-date-field').style.display    = (v === 'once')   ? 'flex' : 'none';
+  document.getElementById('sc-weekday-field').style.display = (v === 'weekly') ? 'flex' : 'none';
+}
+function openSchedModal(id) {
+  const s = id ? schedule.find(x => x.id === id) : null;
+  editingSchedId = s ? s.id : null;
+  document.getElementById('sc-modal-title').textContent = s ? 'Edit schedule item' : 'Add schedule item';
+  document.getElementById('sc-save-btn').textContent    = s ? 'Save' : 'Add';
+  document.getElementById('sc-title').value = s ? s.title : '';
+  document.getElementById('sc-start').value = s ? s.start : '';
+  document.getElementById('sc-end').value   = s ? (s.end || '') : '';
+  document.getElementById('sc-recur').value = s ? (s.recur || 'once') : 'once';
+  document.getElementById('sc-date').value    = (s && s.date) ? s.date : ymd(new Date());
+  document.getElementById('sc-weekday').value = (s && s.weekday != null) ? String(s.weekday) : String(new Date().getDay());
+  onRecurChange();
+  document.getElementById('sched-modal').classList.add('show');
+  setTimeout(() => document.getElementById('sc-title').focus(), 50);
+}
+function saveSched() {
+  const title = document.getElementById('sc-title').value.trim();
+  const start = document.getElementById('sc-start').value;
+  if (!title || !start) { document.getElementById('sc-title').focus(); return; }
+  const recur = document.getElementById('sc-recur').value;
+  const target = editingSchedId ? schedule.find(x => x.id === editingSchedId) : null;
+  const item = target || { id: uid(), location: '' };
+  item.title = title;
+  item.start = start;
+  item.end   = document.getElementById('sc-end').value || '';
+  item.recur = recur;
+  // drop fields that no longer apply to the chosen recurrence
+  delete item.date; delete item.weekday;
+  if (recur === 'once')   item.date = document.getElementById('sc-date').value || ymd(new Date());
+  if (recur === 'weekly') item.weekday = Number(document.getElementById('sc-weekday').value);
+  if (!target) schedule.push(item);
+  editingSchedId = null;
+  saveSchedule(); renderSchedule(new Date()); closeModal('sched-modal');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
+  if (id === 'task-modal')  editingTaskId = null;
+  if (id === 'sched-modal') editingSchedId = null;
+}
+// click outside the card closes the modal
+document.querySelectorAll('.modal-overlay').forEach(o =>
+  o.addEventListener('click', e => { if (e.target === o) closeModal(o.id); }));
+
+/* ════════════════════════════════════════════
+   WEATHER + NEWS (live)
+   ════════════════════════════════════════════ */
+let lastWeather = null, lastNews = { lyten: [], battery: [] }, lastUpdated = null;
+
+async function fetchWithTimeout(url, options = {}, ms = 9000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal, cache: 'no-store' });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function proxyFetch(url) {
+  const looksBad = t => !t || /error code|Request Timeout|Forbidden|not allowed|Too Many Requests|<title>5\d\d/i.test(String(t).slice(0, 160));
+  const attempts = [
+    async () => {
+      const r = await fetchWithTimeout(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&t=${Date.now()}`);
+      if (!r.ok) throw new Error('rss2json ' + r.status);
+      const j = await r.json();
+      if (j && j.status === 'ok' && Array.isArray(j.items)) return JSON.stringify({ rss2jsonItems: j.items });
+      throw new Error('rss2json empty');
+    },
+    async () => {
+      const r = await fetchWithTimeout(`https://api.allorigins.win/get?disableCache=true&url=${encodeURIComponent(url + '&t=' + Date.now())}`);
+      if (!r.ok) throw new Error('allorigins get ' + r.status);
+      const j = await r.json();
+      if (j && j.contents && !looksBad(j.contents)) return j.contents;
+      throw new Error('allorigins empty');
+    },
+    async () => {
+      const r = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${encodeURIComponent(url + '&t=' + Date.now())}`);
+      if (!r.ok) throw new Error('allorigins raw ' + r.status);
+      const t = await r.text();
+      if (!looksBad(t)) return t;
+      throw new Error('allorigins bad text');
+    }
+  ];
+  let lastErr = null;
+  for (const run of attempts) {
+    try { return await run(); }
+    catch (e) { lastErr = e; console.warn('News fetch fallback failed:', e.message || e); }
+  }
+  throw lastErr || new Error('news relay failed');
+}
+function splitSource(title, source = '') {
+  title = (title || '').trim();
+  if (title.includes(' - ')) { const p = title.split(' - '); const last = p.pop().trim(); title = p.join(' - ').trim(); if (!source) source = last; }
+  return { title, source: source.trim() };
+}
+async function getWeather() {
+  // Uses Open-Meteo: no API key, works better from GitHub Pages than exposed API keys.
+  const unit = CFG.weatherUnits === 'metric' ? 'celsius' : 'fahrenheit';
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${CFG.weatherLat}&longitude=${CFG.weatherLon}&current=temperature_2m,apparent_temperature,weather_code&temperature_unit=${unit}&timezone=auto&t=${Date.now()}`;
+  const r = await fetchWithTimeout(url, {}, 9000);
+  if (!r.ok) throw new Error('weather ' + r.status);
+  const d = await r.json();
+  if (!d.current) throw new Error('weather missing current data');
+  const code = Number(d.current.weather_code);
+  const info = WMO_WEATHER[code] || ['🌡️','Weather updated'];
+  return {
+    icon: info[0],
+    temp: Math.round(d.current.temperature_2m) + CFG.tempUnit,
+    feels: 'Feels like ' + Math.round(d.current.apparent_temperature) + CFG.tempUnit,
+    desc: info[1]
+  };
+}
+async function getNewsFromUrl(url, max = 8) {
+  const payload = await proxyFetch(url);
+  try {
+    const j = JSON.parse(payload);
+    if (Array.isArray(j.rss2jsonItems)) {
+      const items = j.rss2jsonItems.slice(0, max).map(it => splitSource(it.title)).filter(a => a.title);
+      if (items.length) return items;
+    }
+  } catch (e) {}
+  const doc = new DOMParser().parseFromString(payload, 'text/xml');
+  const items = [...doc.querySelectorAll('item')].slice(0, max)
+    .map(it => splitSource(it.querySelector('title')?.textContent, it.querySelector('source')?.textContent || ''))
+    .filter(a => a.title);
+  if (!items.length) throw new Error('news parsed empty');
+  return items;
+}
+async function getNews(source, max = 8) {
+  const urls = Array.isArray(source) ? source : [source];
+  const merged = [];
+  const seen = new Set();
+  let lastErr = null;
+  for (const url of urls) {
+    try {
+      const items = await getNewsFromUrl(url, max);
+      for (const item of items) {
+        const key = (item.title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        if (key && !seen.has(key)) { seen.add(key); merged.push(item); }
+      }
+    } catch (e) {
+      lastErr = e;
+      console.warn('News source failed:', url, e.message || e);
+    }
+  }
+  if (!merged.length) throw lastErr || new Error('news parsed empty');
+  return merged.slice(0, max);
+}
+function buildTicker(articles) {
+  if (!articles || !articles.length) return '<span style="color:#3a6a7a;font-size:1vw;font-family:monospace">NO RECENT NEWS</span>';
+  return articles.map(a => {
+    const src = a.source ? ` <span style="color:#3a6a7a;font-size:1.1vw">— ${esc(a.source)}</span>` : '';
+    return `<span class="news-item">${esc(a.title)}${src}</span><span class="news-dot">◆</span>`;
+  }).join('');
+}
+function renderWeather(w) {
+  if (!w) return;
+  document.getElementById('w-icon').textContent = w.icon;
+  document.getElementById('w-temp').textContent = w.temp;
+  document.getElementById('w-desc').textContent = w.desc;
+  document.getElementById('w-feels').textContent = w.feels;
+}
+async function refreshLive() {
+  let failed = 0;
+  const errors = [];
+  try { lastWeather = await getWeather(); } catch (e) { failed++; errors.push('weather'); console.warn('Weather update failed:', e.message || e); }
+  try { lastNews.lyten = await getNews(CFG.news.lyten); } catch (e) { failed++; errors.push('Lyten news'); console.warn('Lyten news update failed:', e.message || e); }
+  try { lastNews.battery = await getNews(CFG.news.battery, 12); } catch (e) { failed++; errors.push('Battery news'); console.warn('Battery news update failed:', e.message || e); }
+  renderWeather(lastWeather);
+  document.getElementById('ticker-lyten').innerHTML = buildTicker(lastNews.lyten);
+  document.getElementById('ticker-battery').innerHTML = buildTicker(lastNews.battery);
+  if (failed < 3) lastUpdated = new Date();
+  const stamp = lastUpdated ? lastUpdated.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+  const status = failed ? ` · ISSUE: ${errors.join(', ')}` : '';
+  document.getElementById('footer').textContent = `LOCAL MODE · SAVED ON THIS SCREEN · WEATHER/NEWS UPDATED ${stamp}${status}`;
+  document.getElementById('offline-banner').textContent = failed ? `⚡ COULDN'T REFRESH: ${errors.join(', ')} — SHOWING LAST KNOWN` : '';
+  document.getElementById('offline-banner').style.display = failed ? 'block' : 'none';
+}
+
+/* ════════════════════════════════════════════
+   DAILY TASK EMAIL (EmailJS, browser-open only)
+   ════════════════════════════════════════════ */
+function buildTaskEmailText(now) {
+  const open = tasks.filter(t => !t.header && !t.done);
+  const order = ['HIGH', 'MED', 'LOW', ''];
+  const heading = { HIGH: 'HIGH PRIORITY', MED: 'MEDIUM', LOW: 'LOW', '': 'OTHER' };
+  let out = `Open tasks as of ${now.toLocaleString('en-US', { weekday:'long', month:'short', day:'numeric' })}\n`;
+  out += `Total open: ${open.length}\n`;
+  if (!open.length) { out += '\nNothing open. 🎉'; }
+  for (const p of order) {
+    const items = open.filter(t => (t.priority || '') === p)
+                      .sort((a, b) => taskSortDate(a).localeCompare(taskSortDate(b)));
+    if (!items.length) continue;
+    out += `\n${heading[p]} (${items.length})\n`;
+    for (const t of items) {
+      const d = daysOpen(t.created);
+      const age = d === null ? '' : `  [${d <= 0 ? 'today' : d + 'd open'}]`;
+      out += `  - ${t.text}${age}\n`;
+    }
+  }
+  if (EMAIL_CFG.includeDoneToday) {
+    const today = ymd(now);
+    const doneToday = tasks.filter(t => !t.header && t.done && (t.completedAt || '').slice(0, 10) === today);
+    if (doneToday.length) {
+      out += `\nCOMPLETED TODAY (${doneToday.length})\n`;
+      for (const t of doneToday) out += `  + ${t.text}\n`;
+    }
+  }
+  return out;
+}
+async function sendTaskEmail(now) {
+  if (!window.emailjs) throw new Error('EmailJS SDK not loaded');
+  const openCount = tasks.filter(t => !t.header && !t.done).length;
+  return emailjs.send(EMAIL_CFG.serviceId, EMAIL_CFG.templateId, {
+    to_email: EMAIL_CFG.toEmail,
+    subject:  `Daily tasks (${openCount} open) — ${ymd(now)}`,
+    message:  buildTaskEmailText(now)
+  });
+}
+function maybeSendDailyEmail(now) {
+  if (!EMAIL_CFG.enabled || !window.emailjs) return;
+  const today = ymd(now);
+  if (load(LS.lastEmail, '') === today) return;                       // already sent today
+  const targetMin = EMAIL_CFG.sendAtHour * 60 + EMAIL_CFG.sendAtMinute;
+  if (now.getHours() * 60 + now.getMinutes() < targetMin) return;     // not time yet
+  save(LS.lastEmail, today);                                          // mark first so we don't double-send on retry
+  sendTaskEmail(now)
+    .then(() => console.log('Daily task email sent for', today))
+    .catch(e => { console.warn('Daily email failed:', e?.text || e?.message || e); save(LS.lastEmail, ''); });
+}
+
+/* ════════════════════════════════════════════
+   CLOCK + AUTO-FIT + START
+   ════════════════════════════════════════════ */
+// Sizes the clock to its column so it never overflows into the next
+// column (overlap) or leaves an awkward gap (underlap). Container-relative,
+// so it works on the TV, desktop, and phones alike.
+function fitClock() {
+  const col  = document.querySelector('.clock-col');
+  const time = document.getElementById('clock-time');
+  if (!col || !time) return;
+  const availW = col.clientWidth - 48;               // breathing room L/R
+  const availH = col.clientHeight;
+  let size = Math.min(availH * 0.40, availW * 0.42); // height- and width-capped guess
+  if (size < 12) size = 12;
+  time.style.fontSize = size + 'px';
+  // one exact corrective pass (font width scales linearly, so no loop needed)
+  const w = time.scrollWidth;
+  if (w > availW) { size = size * (availW / w); time.style.fontSize = size + 'px'; }
+  // derive the rest from the locked-in clock size
+  document.getElementById('clock-seconds').style.fontSize = (size * 0.26) + 'px';
+  document.getElementById('clock-date').style.fontSize    = (size * 0.155) + 'px';
+  document.getElementById('clock-day').style.fontSize     = (size * 0.085) + 'px';
+}
+let lastClockText = '';
+function updateClock() {
+  const now = new Date();
+  const timeStr = pad(now.getHours()) + ':' + pad(now.getMinutes());
+  document.getElementById('clock-time').textContent    = timeStr;
+  document.getElementById('clock-seconds').textContent = pad(now.getSeconds());
+  document.getElementById('clock-date').textContent    = MONTHS[now.getMonth()] + ' ' + now.getDate() + ', ' + now.getFullYear();
+  document.getElementById('clock-day').textContent     = DAYS[now.getDay()].toUpperCase();
+  document.getElementById('sched-day').textContent     = DAYS[now.getDay()].toUpperCase();
+  if (timeStr !== lastClockText) { lastClockText = timeStr; fitClock(); }   // refit only when digits change
+  renderSchedule(now);
+  maybeSendDailyEmail(now);
+}
+
+// refit on viewport changes (window resize, TV rotation, mobile address bar, font load)
+window.addEventListener('resize', fitClock);
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitClock);
+
+// init EmailJS if configured
+if (EMAIL_CFG.enabled && window.emailjs) {
+  try { emailjs.init({ publicKey: EMAIL_CFG.publicKey }); }
+  catch (e) { console.warn('EmailJS init failed:', e); }
+}
+
+/* ════════════════════════════════════════════
+   AUTH  (Google + email magic link, via Supabase)
+   ════════════════════════════════════════════ */
+function loginMsg(text, kind) {
+  const el = document.getElementById('login-msg');
+  if (!el) return;
+  el.textContent = text || '';
+  el.className = 'login-msg' + (kind ? ' ' + kind : '');
+}
+async function signInGoogle() {
+  if (!sb) return loginMsg('Cloud not configured yet — see setup notes.', 'err');
+  loginMsg('Redirecting to Google…');
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.href.split('#')[0] }
+  });
+  if (error) loginMsg(error.message, 'err');
+}
+async function signInMagic() {
+  if (!sb) return loginMsg('Cloud not configured yet — see setup notes.', 'err');
+  const email = (document.getElementById('magic-email').value || '').trim();
+  if (!email) return loginMsg('Enter your email first.', 'err');
+  loginMsg('Sending link…');
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.href.split('#')[0] }
+  });
+  if (error) loginMsg(error.message, 'err');
+  else loginMsg('Check your email for the sign-in link ✓', 'ok');
+}
+async function signOut() {
+  if (sb) await sb.auth.signOut();
+  location.reload();
+}
+
+// Find (or wait for the trigger to create) this user's board, then load it.
+async function resolveBoardAndLoad() {
+  // The DB trigger auto-creates a personal board on first signup, but on the
+  // very first login it may race the query — so we retry a couple of times.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const { data, error } = await sb.from('boards')
+      .select('id').eq('owner', currentUser.id).order('created_at').limit(1);
+    if (!error && data && data.length) { currentBoardId = data[0].id; break; }
+    // fallback: create one ourselves if the trigger didn't (belt and suspenders)
+    if (attempt === 2) {
+      const ins = await sb.from('boards')
+        .insert({ owner: currentUser.id, name: 'My Info Screen', type: 'personal' })
+        .select('id').single();
+      if (!ins.error && ins.data) { currentBoardId = ins.data.id; break; }
+    }
+    await new Promise(r => setTimeout(r, 500));
+  }
+  if (!currentBoardId) { setSync('offline'); return; }
+  await cloudPullBoard();
+  // repaint with cloud data
+  renderTasks();
+  renderSchedule(new Date());
+  const sel = document.getElementById('task-sort'); if (sel) sel.value = taskSort;
+}
+
+// Show the dashboard, hide the login gate.
+function enterApp() {
+  document.getElementById('login-gate').style.display = 'none';
+  document.getElementById('sync-pill').style.display = 'flex';
+  fitClock();
+}
+
+/* ════════════════════════════════════════════
+   BOOT
+   ════════════════════════════════════════════ */
+// The clock/weather/news don't need login — start them right away so the
+// screen is alive even on the login page background isn't blank.
+(() => { const sel = document.getElementById('task-sort'); if (sel) sel.value = taskSort; })();
+renderTasks();
+updateClock();
+fitClock();
+setInterval(updateClock, 1000);
+setInterval(renderTasks, 60 * 1000);
+refreshLive();
+setInterval(refreshLive, CFG.refreshMinutes * 60 * 1000);
+
+// Cloud sync: pull the board on login, and every minute after (your chosen cadence).
+async function startCloud() {
+  if (!cloudConfigured()) {
+    // No keys yet → run exactly like the old local-only version.
+    document.getElementById('login-gate').style.display = 'none';
+    document.getElementById('footer').textContent = 'LOCAL MODE · ADD SUPABASE KEYS TO SYNC';
+    return;
+  }
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // React to login/logout events (covers OAuth redirect + magic-link return).
+  sb.auth.onAuthStateChange(async (_event, session) => {
+    if (session && session.user) {
+      currentUser = session.user;
+      enterApp();
+      await resolveBoardAndLoad();
+    } else {
+      currentUser = null; currentBoardId = null;
+      document.getElementById('login-gate').style.display = 'flex';
+      document.getElementById('sync-pill').style.display = 'none';
+    }
+  });
+
+  // Check for an existing session on load.
+  const { data } = await sb.auth.getSession();
+  if (data && data.session) {
+    currentUser = data.session.user;
+    enterApp();
+    await resolveBoardAndLoad();
+  }
+
+  // Gentle background re-pull every minute (your "refresh each minute" choice).
+  // Guarded by currentBoardId, so it does nothing until you're logged in.
+  setInterval(() => {
+    if (currentBoardId) cloudPullBoard().then(() => { renderTasks(); renderSchedule(new Date()); });
+  }, 60 * 1000);
+}
+startCloud();
+</script>
+</body>
+</html>
